@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediBot - Intelligent Medicine Recommendation System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+        }
+        .message {
+            max-width: 80%;
+            margin: 10px;
+            padding: 15px;
+            border-radius: 15px;
+            line-height: 1.5;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: auto;
+        }
+        .bot-message {
+            background-color: #f8f9fa;
+            margin-right: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .typing-indicator {
+            display: none;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 15px;
+            margin: 10px;
+        }
+        .pharmacy-link {
+            color: #2563eb;
+            text-decoration: underline;
+            cursor: pointer;
+            display: inline-block;
+            margin-top: 5px;
+            padding: 5px 10px;
+            background-color: #e3f2fd;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        .pharmacy-link:hover {
+            background-color: #bbd6fe;
+        }
+        .location-status {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        .medical-response {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .response-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 10px;
+            border-left: 4px solid #3b82f6;
+        }
+        .response-section h3 {
+            color: #1e40af;
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        .response-section ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .response-section li {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        .response-section p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        .symptom-form {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #3b82f6;
+        }
+        .symptom-form label {
+            display: block;
+            margin: 10px 0 5px;
+            color: #1e40af;
+            font-weight: 500;
+        }
+        .symptom-form input[type="text"],
+        .symptom-form input[type="number"],
+        .symptom-form select,
+        .symptom-form textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .symptom-form input[type="number"] {
+            width: 100px;
+        }
+        .form-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .form-button {
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .submit-form {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+        }
+        .submit-form:hover {
+            background-color: #2563eb;
+        }
+        .cancel-form {
+            background-color: #f3f4f6;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+        }
+        .cancel-form:hover {
+            background-color: #e5e7eb;
+        }
+        
+        /* Additional styles for detailed symptom display */
+        .user-details {
+            background-color: #f0f7ff;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .user-details .original-query {
+            font-weight: 500;
+            color: #2563eb;
+            margin-bottom: 8px;
+        }
+        
+        .user-details .additional-details {
+            background-color: #ffffff;
+            border-radius: 6px;
+            padding: 10px;
+        }
+        
+        .user-details ul {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+            list-style-type: none;
+        }
+        
+        .user-details li {
+            margin: 4px 0;
+            color: #4b5563;
+        }
+        
+        .user-details strong {
+            color: #1e40af;
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        /* Additional styles for pharmacy links */
+        .pharmacy-link {
+            color: #2563eb;
+            text-decoration: underline;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        .pharmacy-link:hover {
+            color: #1d4ed8;
+            text-decoration: none;
+        }
+        
+        .pharmacy-link:visited {
+            color: #3b82f6;
+        }
+        
+        /* Additional styles for Google Maps button */
+        .maps-link {
+            margin-top: 15px;
+            text-align: center;
+        }
+        
+        .google-maps-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background-color: #4285f4;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        .google-maps-btn:hover {
+            background-color: #357abd;
+        }
+        
+        .google-maps-btn img {
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-4xl font-bold text-blue-600">MediBot</h1>
+                <p class="text-gray-600 mt-2">Your AI-Powered Medicine Recommendation Assistant</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-gray-600">Welcome, {{ current_user.username }}!</span>
+                <a href="{{ url_for('logout') }}" 
+                   class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                    Logout
+                </a>
+            </div>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-4">
+            <div id="location-status" class="location-status">
+                Detecting your location...
+            </div>
+
+            <div id="chat-messages" class="chat-container overflow-y-auto mb-4">
+                <div class="bot-message message">
+                    Hello {{ current_user.username }}! I'm MediBot, your medical assistant. Please describe your symptoms, and I'll help recommend appropriate medicines and where to find them nearby.
+                </div>
+            </div>
+
+            <!-- Symptom Form Template -->
+            <div id="symptom-form" class="symptom-form" style="display: none;">
+                <h3 class="text-lg font-semibold mb-3">Please provide additional details</h3>
+                <form id="detailed-symptom-form">
+                    <div>
+                        <label for="duration">How long have you had these symptoms?</label>
+                        <input type="text" id="duration" name="duration" placeholder="e.g., 2 days, 1 week">
+                    </div>
+                    
+                    <div>
+                        <label for="severity">Rate the severity (1-10)</label>
+                        <input type="number" id="severity" name="severity" min="1" max="10">
+                    </div>
+                    
+                    <div>
+                        <label for="pattern">Are the symptoms constant or do they come and go?</label>
+                        <select id="pattern" name="pattern">
+                            <option value="">Please select</option>
+                            <option value="constant">Constant</option>
+                            <option value="intermittent">Come and go</option>
+                            <option value="progressive">Getting worse</option>
+                            <option value="improving">Getting better</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="other_symptoms">Any other symptoms?</label>
+                        <textarea id="other_symptoms" name="other_symptoms" rows="2" placeholder="List any other symptoms you're experiencing"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label for="medications">Have you taken any medications?</label>
+                        <textarea id="medications" name="medications" rows="2" placeholder="List any medications you've tried"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label for="triggers">What makes it better or worse?</label>
+                        <textarea id="triggers" name="triggers" rows="2" placeholder="e.g., certain foods, activities, time of day"></textarea>
+                    </div>
+                    
+                    <div class="form-buttons">
+                        <button type="submit" class="form-button submit-form">Submit Details</button>
+                        <button type="button" class="form-button cancel-form" onclick="hideSymptomForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="typing-indicator" id="typing-indicator">
+                MediBot is thinking...
+            </div>
+
+            <div class="flex gap-2">
+                <textarea 
+                    id="user-input" 
+                    class="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    placeholder="Describe your symptoms here..."
+                    rows="2"
+                ></textarea>
+                <button 
+                    id="send-button"
+                    class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let userLocation = null;
+        let originalSymptoms = "";
+
+        // Get user's location
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        console.log('Location obtained:', userLocation);
+                    },
+                    (error) => {
+                        console.error('Error getting location:', error);
+                    }
+                );
+            }
+        }
+
+        function createGoogleMapsLink(location) {
+            if (!location) return '';
+            
+            // Create a Google Maps search URL for pharmacies near the user's location
+            const searchQuery = 'pharmacies near me';
+            const baseUrl = 'https://www.google.com/maps/search/';
+            const params = new URLSearchParams({
+                'api': '1',
+                'query': searchQuery,
+                'center': `${location.lat},${location.lng}`,
+                'zoom': '13'
+            });
+            
+            return `${baseUrl}${searchQuery}/@${location.lat},${location.lng},13z?${params.toString()}`;
+        }
+
+        function formatMessageWithPharmacyLinks(message) {
+            if (!userLocation) return message;
+
+            const mapsLink = createGoogleMapsLink(userLocation);
+            
+            // Replace the placeholder text with an actual link
+            if (message.includes("(click map link below)")) {
+                message = message.replace(
+                    "Available at nearby pharmacies (click map link below)",
+                    `Available at nearby pharmacies (<a href="${mapsLink}" target="_blank" class="pharmacy-link">view on Google Maps</a>)`
+                );
+            }
+            
+            return message;
+        }
+
+        function formatFormDataForDisplay(formData) {
+            const details = [
+                `Duration: ${formData.duration}`,
+                `Severity: ${formData.severity}/10`,
+                `Pattern: ${formData.pattern}`,
+                formData.other_symptoms ? `Other symptoms: ${formData.other_symptoms}` : null,
+                formData.medications ? `Previous medications: ${formData.medications}` : null,
+                formData.triggers ? `Triggers: ${formData.triggers}` : null
+            ].filter(item => item !== null);
+
+            return `<div class="user-details">
+                <div class="original-query">Original symptoms: ${originalSymptoms}</div>
+                <div class="additional-details">
+                    <strong>Additional Details Provided:</strong>
+                    <ul>
+                        ${details.map(detail => `<li>${detail}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>`;
+        }
+
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const typingIndicator = document.getElementById('typing-indicator');
+
+        function addMessage(message, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = isUser ? 'user-message message' : 'bot-message message';
+            
+            // Check if the message is HTML content
+            if (message.startsWith('<div')) {
+                messageDiv.innerHTML = message;
+            } else {
+                // For bot messages, process pharmacy links
+                if (!isUser) {
+                    message = formatMessageWithPharmacyLinks(message);
+                }
+                messageDiv.innerHTML = message; // Use innerHTML to handle the links
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function showSymptomForm() {
+            document.getElementById('symptom-form').style.display = 'block';
+            document.getElementById('user-input').disabled = true;
+            document.getElementById('send-button').disabled = true;
+        }
+
+        function hideSymptomForm() {
+            document.getElementById('symptom-form').style.display = 'none';
+            document.getElementById('user-input').disabled = false;
+            document.getElementById('send-button').disabled = false;
+        }
+
+        function collectFormData() {
+            const form = document.getElementById('detailed-symptom-form');
+            const formData = new FormData(form);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+            return data;
+        }
+
+        async function sendDetailedMessage(message) {
+            typingIndicator.style.display = 'block';
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        symptoms: message,
+                        location: userLocation
+                    })
+                });
+
+                const data = await response.json();
+                typingIndicator.style.display = 'none';
+                
+                if (data.error) {
+                    addMessage('Sorry, I encountered an error. Please try again.');
+                } else {
+                    addMessage(data.answer);
+                }
+            } catch (error) {
+                typingIndicator.style.display = 'none';
+                addMessage('Sorry, I encountered an error. Please try again.');
+                console.error('Error:', error);
+            }
+        }
+
+        document.getElementById('detailed-symptom-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = collectFormData();
+            
+            // Validate required fields
+            if (!formData.duration || !formData.severity || !formData.pattern) {
+                alert('Please fill in at least the duration, severity, and pattern of your symptoms.');
+                return;
+            }
+            
+            // Display user's original query and form data
+            const formattedMessage = formatFormDataForDisplay(formData);
+            addMessage(formattedMessage, true);
+            
+            const detailedSymptoms = `Original symptoms: ${originalSymptoms}\n` +
+                                   `Duration: ${formData.duration}\n` +
+                                   `Severity: ${formData.severity}/10\n` +
+                                   `Pattern: ${formData.pattern}\n` +
+                                   `Other symptoms: ${formData.other_symptoms || 'None'}\n` +
+                                   `Previous medications: ${formData.medications || 'None'}\n` +
+                                   `Triggers: ${formData.triggers || 'None'}`;
+            
+            hideSymptomForm();
+            document.getElementById('detailed-symptom-form').reset();
+            await sendDetailedMessage(detailedSymptoms);
+        });
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            originalSymptoms = message;
+            userInput.value = '';
+            typingIndicator.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        symptoms: message,
+                        location: userLocation
+                    })
+                });
+
+                const data = await response.json();
+                typingIndicator.style.display = 'none';
+                
+                if (data.needsMoreInfo) {
+                    showSymptomForm();
+                } else {
+                    addMessage(message, true);
+                    addMessage(data.answer);
+                }
+            } catch (error) {
+                typingIndicator.style.display = 'none';
+                addMessage('Sorry, I encountered an error. Please try again.');
+                console.error('Error:', error);
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Initialize location detection
+        getUserLocation();
+    </script>
+</body>
+</html>
