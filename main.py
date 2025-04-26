@@ -4,7 +4,11 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 import requests
 import json
 import os
+from dotenv import load_dotenv
 from models import db, User
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -21,6 +25,15 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 OLLAMA_API_URL = "http://localhost:11434"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+print(f"[DEBUG] GEMINI_API_KEY loaded: {'Yes' if GEMINI_API_KEY else 'No'}")
+
+# Import Google Generative AI library
+try:
+    import google.generativeai as genai
+except ImportError:
+    print("Google Generative AI library not installed. Using fallback only.")
+    genai = None
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -184,7 +197,97 @@ def format_ollama_response(response_text, location=None):
     html_response += '</div>'
     return html_response
 
+def format_gemini_response(response_text, location=None):
+    """Format the Gemini response into HTML with our styling"""
+    # Ensure the response follows our expected format
+    if not response_text.startswith("POSSIBLE MEDICINES:"):
+        # If response doesn't start with our format, try to extract the relevant parts
+        sections = {
+            "POSSIBLE MEDICINES:": [],
+            "PRECAUTIONS:": [],
+            "WHERE TO FIND:": []
+        }
+        
+        # Simple parsing logic to extract sections from unstructured text
+        current_section = None
+        for line in response_text.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if this line is a section header
+            if "medicine" in line.lower() or "medication" in line.lower() or "treatment" in line.lower():
+                current_section = "POSSIBLE MEDICINES:"
+                continue
+            elif "precaution" in line.lower() or "warning" in line.lower() or "caution" in line.lower():
+                current_section = "PRECAUTIONS:"
+                continue
+            elif "find" in line.lower() or "location" in line.lower() or "available" in line.lower():
+                current_section = "WHERE TO FIND:"
+                continue
+                
+            if current_section and line:
+                # Clean up the line and add it to the appropriate section
+                cleaned_line = line.strip('- ').strip()
+                if cleaned_line:
+                    sections[current_section].append(cleaned_line)
+        
+        # Reconstruct the response in our expected format
+        formatted_response = "POSSIBLE MEDICINES:\n"
+        for item in sections["POSSIBLE MEDICINES:"] or ["Consult with a healthcare provider for specific medication recommendations"]:
+            formatted_response += f"- {item}\n"
+            
+        formatted_response += "\nPRECAUTIONS:\n"
+        for item in sections["PRECAUTIONS:"] or ["Monitor symptoms", "Rest and stay hydrated", "Seek medical attention if symptoms worsen"]:
+            formatted_response += f"- {item}\n"
+            
+        formatted_response += "\nWHERE TO FIND:\n"
+        for item in sections["WHERE TO FIND:"] or ["Local pharmacies", "Drug stores", "Consult healthcare provider"]:
+            formatted_response += f"- {item}\n"
+            
+        response_text = formatted_response
+    
+    # Use the existing format_ollama_response function since the format is the same
+    return format_ollama_response(response_text, location)
+
+def generate_gemini_response(prompt, location=None):
+    """Generate a response using the Gemini API"""
+    print(f"[DEBUG] Entered generate_gemini_response. GEMINI_API_KEY: {'set' if GEMINI_API_KEY else 'not set'}, genai: {'available' if genai else 'not available'}")
+    if not GEMINI_API_KEY or not genai:
+        print("[ERROR] Gemini API key not set or library not available")
+        return None
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        detailed_prompt = f"""Provide medical advice for: {prompt}\n\nYou must respond in this exact format:\n\nPOSSIBLE MEDICINES:\n1. Medicine name (Brand name) - dosage and frequency\n2. Medicine name (Brand name) - dosage and frequency\n3. Medicine name (Brand name) - dosage and frequency\n\nPRECAUTIONS:\n- Safety step 1\n- Safety step 2\n- Safety step 3\n\nWHERE TO FIND:\n- Location 1\n- Location 2\n- Location 3\n\nDo not include any other text. Start directly with POSSIBLE MEDICINES:"""
+        print("[DEBUG] Sending request to Gemini model...")
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(detailed_prompt)
+        print(f"[DEBUG] Gemini API raw response: {getattr(response, 'text', str(response))[:500]}")
+        if response and hasattr(response, 'text'):
+            model_response = response.text.strip()
+            print(f"[DEBUG] Gemini response received: {model_response[:200]}...")
+            return format_gemini_response(model_response, location)
+        else:
+            print("[ERROR] Empty or invalid response from Gemini")
+            return None
+    except Exception as e:
+        print(f"[ERROR] Gemini API error: {str(e)}")
+        return None
+
 def get_model_response(prompt, location=None):
+    # First try using Gemini API
+    if GEMINI_API_KEY:
+        print("Attempting to use Gemini API...")
+        gemini_response = generate_gemini_response(prompt, location)
+        if gemini_response:
+            print("Successfully generated response with Gemini")
+            return gemini_response
+        else:
+            print("Gemini response failed, falling back to MedLLama...")
+    else:
+        print("No Gemini API key found, using MedLLama directly...")
+    
+    # If Gemini fails or is not configured, fall back to MedLLama
     try:
         print("Attempting to connect to Ollama...")
         # First try Ollama API
@@ -193,26 +296,7 @@ def get_model_response(prompt, location=None):
         
         if response.status_code == 200:
             # Use a more direct prompt style
-            detailed_prompt = f"""Provide medical advice for: {prompt}
-
-You must respond in this exact format:
-
-POSSIBLE MEDICINES:
-1. Medicine name (Brand name) - dosage and frequency
-2. Medicine name (Brand name) - dosage and frequency
-3. Medicine name (Brand name) - dosage and frequency
-
-PRECAUTIONS:
-- Safety step 1
-- Safety step 2
-- Safety step 3
-
-WHERE TO FIND:
-- Location 1
-- Location 2
-- Location 3
-
-Do not include any other text. Start directly with POSSIBLE MEDICINES:"""
+            detailed_prompt = f"""Provide medical advice for: {prompt}\n\nYou must respond in this exact format:\n\nPOSSIBLE MEDICINES:\n1. Medicine name (Brand name) - dosage and frequency\n2. Medicine name (Brand name) - dosage and frequency\n3. Medicine name (Brand name) - dosage and frequency\n\nPRECAUTIONS:\n- Safety step 1\n- Safety step 2\n- Safety step 3\n\nWHERE TO FIND:\n- Location 1\n- Location 2\n- Location 3\n\nDo not include any other text. Start directly with POSSIBLE MEDICINES:"""
             
             print("Sending request to Ollama model...")
             
@@ -257,7 +341,7 @@ Do not include any other text. Start directly with POSSIBLE MEDICINES:"""
     except Exception as e:
         print(f"Ollama API error: {str(e)}")
 
-    print("Model response failed, using fallback system...")
+    print("All model responses failed, using fallback system...")
     # If all attempts fail, use our fallback system
     symptoms_lower = prompt.lower()
     response_sections = {
@@ -339,7 +423,7 @@ Do not include any other text. Start directly with POSSIBLE MEDICINES:"""
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('home'))
+        return redirect(url_for('index'))
     
     if request.method == 'POST':
         username = request.form.get('username')
@@ -372,7 +456,7 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('home'))
+        return redirect(url_for('index'))
     
     if request.method == 'POST':
         username = request.form.get('username')
@@ -381,7 +465,7 @@ def login():
         
         if user and user.check_password(password):
             login_user(user)
-            return redirect(url_for('home'))
+            return redirect(url_for('index'))
         else:
             flash('Invalid username or password')
             return redirect(url_for('login'))
@@ -396,7 +480,7 @@ def logout():
 
 @app.route('/')
 @login_required
-def home():
+def index():
     return render_template('index.html')
 
 @app.route('/api/chat', methods=['POST'])
